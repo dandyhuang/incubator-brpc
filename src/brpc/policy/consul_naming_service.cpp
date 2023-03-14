@@ -231,6 +231,7 @@ int ConsulNamingService::RunNamingService(const char* service_name,
             actions->ResetServers(servers);
         } else {
             if (!ever_reset) {
+                // 第一次的时候如果失败会怎么样？？？
                 // ResetServers must be called at first time even if GetServers
                 // failed, to wake up callers to `WaitForFirstBatchOfServers'
                 ever_reset = true;

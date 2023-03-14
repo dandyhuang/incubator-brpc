@@ -123,26 +123,33 @@ inline int Socket::Dereference() {
 }
 
 inline int Socket::Address(SocketId id, SocketUniquePtr* ptr) {
+    // 高32位版本号，低32位数组下标
     const butil::ResourceId<Socket> slot = SlotOfSocketId(id);
+    // 通过数组下标，获取到内存池的数据
     Socket* const m = address_resource(slot);
     if (__builtin_expect(m != NULL, 1)) {
         // acquire fence makes sure this thread sees latest changes before
         // Dereference() or Revive().
+        // 引用计数+1，返回引用计数之前的值
         const uint64_t vref1 = m->_versioned_ref.fetch_add(
             1, butil::memory_order_acquire);
         const uint32_t ver1 = VersionOfVRef(vref1);
+        // 高32位提取版本号
         if (ver1 == VersionOfSocketId(id)) {
+            // 相等，说明当前socket没有setfail，或者没有被回收，或者没有被使用
             ptr->reset(m);
             return 0;
         }
-
+        // 无法使用，所以需要sub一次，刚才add了。
         const uint64_t vref2 = m->_versioned_ref.fetch_sub(
             1, butil::memory_order_release);
         const int32_t nref = NRefOfVRef(vref2);
+        // 因为申请的时候就是1。大于1说明被其他线程使用
         if (nref > 1) {
             return -1;
         } else if (__builtin_expect(nref == 1, 1)) {
             const uint32_t ver2 = VersionOfVRef(vref2);
+            // 判断版本号是否是奇数，因为setfail是+1，回收+2，其他人使用+1
             if ((ver2 & 1)) {
                 if (ver1 == ver2 || ver1 + 1 == ver2) {
                     uint64_t expected_vref = vref2 - 1;
@@ -217,7 +224,7 @@ inline int Socket::AddressFailedAsWell(SocketId id, SocketUniquePtr* ptr) {
             CHECK(false) << "Over dereferenced SocketId=" << id;
         }
     }
-    return -1;    
+    return -1;
 }
 
 inline bool Socket::Failed() const {
