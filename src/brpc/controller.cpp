@@ -984,7 +984,7 @@ void Controller::HandleSendFailed() {
 
 void Controller::IssueRPC(int64_t start_realtime_us) {
     _current_call.begin_time_us = start_realtime_us;
-    
+
     // If has retry/backup request，we will recalculate the timeout,
     if (_real_timeout_ms > 0) {
         _real_timeout_ms -= (start_realtime_us - _begin_time_us) / 1000;
@@ -1001,10 +1001,12 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
     // call_id + N + 1 : retry N
     // All ids except call_id are versioned. Say if we've sent retry 1 and
     // a failed response of first try comes back, it will be ignored.
+    // 首先通过current_id()得到该次请求的CallId，如上所述，第一次请求版本号为1 + 0 + 1 = 2
     const CallId cid = current_id();
 
     // Intercept IssueRPC when _sender is set. Currently _sender is only set
     // by SelectiveChannel.
+    // 初始值为null
     if (_sender) {
         if (_sender->IssueRPC(start_realtime_us) != 0) {
             return HandleSendFailed();
@@ -1033,6 +1035,7 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
             { start_realtime_us, true,
               has_request_code(), _request_code, _accessed };
         LoadBalancer::SelectOut sel_out(&tmp_sock);
+        // 获取socket保存在tmp_sock中
         const int rc = _lb->SelectServer(sel_in, &sel_out);
         if (rc != 0) {
             std::ostringstream os;
@@ -1083,6 +1086,7 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
         _current_call.sending_sock->set_preferred_index(_preferred_index);
     } else {
         int rc = 0;
+        // pooled调用
         if (_connection_type == CONNECTION_TYPE_POOLED) {
             rc = tmp_sock->GetPooledSocket(&_current_call.sending_sock);
         } else if (_connection_type == CONNECTION_TYPE_SHORT) {
@@ -1102,6 +1106,7 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
         // the response comes back, InputMessenger calls the right handler
         // w/o trying other protocols. This is a must for (many) protocols that
         // can't be distinguished from other protocols w/o ambiguity.
+        // 减少协议解析
         _current_call.sending_sock->set_preferred_index(_preferred_index);
         // Set preferred_index of main_socket as well to make it easier to
         // debug and observe from /connections.
@@ -1137,6 +1142,7 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
     // Make request
     butil::IOBuf packet;
     SocketMessage* user_packet = NULL;
+    // 协议组包
     _pack_request(&packet, &user_packet, cid.value, _method, this,
                   _request_buf, using_auth);
     // TODO: PackRequest may accept SocketMessagePtr<>?
@@ -1175,6 +1181,7 @@ void Controller::IssueRPC(int64_t start_realtime_us) {
         if (span) {
             packet_size = user_packet_guard->EstimatedByteSize();
         }
+        // 发送数据
         rc = _current_call.sending_sock->Write(user_packet_guard, &wopt);
     } else {
         packet_size = packet.size();
@@ -1242,6 +1249,7 @@ int Controller::HandleSocketFailed(bthread_id_t id, void* data, int error_code,
 }
 
 CallId Controller::call_id() {
+    // 初始值为0
     butil::atomic<uint64_t>* target =
         (butil::atomic<uint64_t>*)&_correlation_id.value;
     uint64_t loaded = target->load(butil::memory_order_relaxed);

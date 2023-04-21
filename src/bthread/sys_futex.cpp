@@ -59,7 +59,7 @@ static void InitFutexMap() {
     }
     return;
 }
-
+// addr1是锁变量的地址，expected是在外层调用spinlock时看到的锁变量的值。
 int futex_wait_private(void* addr1, int expected, const timespec* timeout) {
     if (pthread_once(&init_futex_map_once, InitFutexMap) != 0) {
         LOG(FATAL) << "Fail to pthread_once";
@@ -73,22 +73,30 @@ int futex_wait_private(void* addr1, int expected, const timespec* timeout) {
     int rc = 0;
     {
         std::unique_lock<pthread_mutex_t> mu1(simu_futex.lock);
+        // 判断锁*addr1的当前最新值是否等于expected期望值。
         if (static_cast<butil::atomic<int>*>(addr1)->load() == expected) {
+            // 锁*addr1的当前最新值与expected期望值相等，可以使用系统调用将当前线程挂起。
+            // 因为有一个线程为了等待锁而将要被挂起，锁*addr1相关的counts计数器需要递增1。
             ++simu_futex.counts;
+             // 调用pthread_cond_wait将当前线程挂起，并释放simu_futex.lock锁。
             if (timeout) {
                 timespec timeout_abs = butil::timespec_from_now(*timeout);
                 if ((rc = pthread_cond_timedwait(&simu_futex.cond, &simu_futex.lock, &timeout_abs)) != 0) {
+                    // pthread_cond_timedwait返回时会再次对simu_futex.lock上锁。
                     errno = rc;
                     rc = -1;
                 }
             } else {
                 if ((rc = pthread_cond_wait(&simu_futex.cond, &simu_futex.lock)) != 0) {
+                    // pthread_cond_wait返回时会再次对simu_futex.lock上锁。
                     errno = rc;
                     rc = -1;
                 }
             }
+            // 当前线程已被唤醒并持有了锁*addr1，counts计数器递减1。
             --simu_futex.counts;
         } else {
+             // 锁*addr1的当前最新值与expected期望值不等，需要再次执行上层的spinlock。
             errno = EAGAIN;
             rc = -1;
         }
