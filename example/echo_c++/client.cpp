@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
         example::EchoRequest request;
         example::EchoResponse response;
         brpc::Controller cntl;
+        cntl.set_timeout_ms(100);
 
         request.set_message("hello world");
 

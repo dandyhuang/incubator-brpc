@@ -144,6 +144,8 @@ TEST(RecorderTest, positive_overflow) {
 }
 
 TEST(RecorderTest, negtive_overflow) {
+    bvar::Maxer<int> max_value;
+    bvar::Window<bvar::Maxer<int> > max_value_per_second(&max_value, 1);
     bvar::IntRecorder recorder1;
     ASSERT_TRUE(recorder1.valid());
     for (int i = 0; i < 5; ++i) {

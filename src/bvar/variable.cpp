@@ -143,19 +143,21 @@ int Variable::expose_impl(const butil::StringPiece& prefix,
     // to contend heavily.
 
     // remove previous pointer from the map if needed.
+    // 删除之前的_name
     hide();
 
     // Build the name.
     _name.clear();
     _name.reserve((prefix.size() + name.size()) * 5 / 4);
     if (!prefix.empty()) {
+        // prefix替换'_'
         to_underscored_name(&_name, prefix);
         if (!_name.empty() && butil::back_char(_name) != '_') {
             _name.push_back('_');
         }
     }
     to_underscored_name(&_name, name);
-    
+    // 获取全局的s_var_maps
     VarMapWithLock& m = get_var_map(_name);
     {
         BAIDU_SCOPED_LOCK(m.mutex);

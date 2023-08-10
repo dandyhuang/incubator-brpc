@@ -1291,6 +1291,7 @@ int Socket::CheckConnected(int sockfd) {
     }
     int err = 0;
     socklen_t errlen = sizeof(err);
+    // 获取套接字的错误状态
     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) < 0) {
         PLOG(ERROR) << "Fail to getsockopt of fd=" << sockfd;
         return -1;
