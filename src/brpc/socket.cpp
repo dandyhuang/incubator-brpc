@@ -895,6 +895,7 @@ int Socket::SetFailed(int error_code, const char* error_fmt, ...) {
             // comes online.
             if (_health_check_interval_s > 0) {
                 bool expect = false;
+                // health_check后，_hc_started会设置为false
                 if (_hc_started.compare_exchange_strong(expect,
                                                         true,
                                                         butil::memory_order_relaxed,
@@ -2386,6 +2387,7 @@ int Socket::CheckHealth() {
     const timespec duetime =
         butil::milliseconds_from_now(FLAGS_health_check_timeout_ms);
     const int connected_fd = Connect(&duetime, NULL, NULL);
+    // 尝试建立连接，成功关闭临时fd，on_connect == NULL
     if (connected_fd >= 0) {
         ::close(connected_fd);
         return 0;
