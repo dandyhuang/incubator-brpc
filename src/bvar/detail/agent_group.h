@@ -180,6 +180,7 @@ private:
     static pthread_mutex_t                      _s_mutex;
     static AgentId                              _s_agent_kinds;
     static std::deque<AgentId>                  *_s_free_ids;
+    // __thread 是C++11标准引入的线程局部存储（TLS）关键字
     static __thread std::vector<ThreadBlock *>  *_s_tls_blocks;
 };
 

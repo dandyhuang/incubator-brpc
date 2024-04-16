@@ -92,7 +92,7 @@ void NamingServiceThread::Actions::RemoveServers(
 void NamingServiceThread::Actions::ResetServers(
         const std::vector<ServerNode>& servers) {
     _servers.assign(servers.begin(), servers.end());
-    
+
     // Diff servers with _last_servers by comparing sorted vectors.
     // Notice that _last_servers is always sorted.
     std::sort(_servers.begin(), _servers.end());
@@ -104,14 +104,15 @@ void NamingServiceThread::Actions::ResetServers(
         _servers.resize(dedup_size);
     }
     _added.resize(_servers.size());
-    std::vector<ServerNode>::iterator _added_end = 
+    // 求出差集，新服务中增加的数量
+    std::vector<ServerNode>::iterator _added_end =
         std::set_difference(_servers.begin(), _servers.end(),
                             _last_servers.begin(), _last_servers.end(),
                             _added.begin());
     _added.resize(_added_end - _added.begin());
-
+    // 求出差集，老服务中减少的服务数据
     _removed.resize(_last_servers.size());
-    std::vector<ServerNode>::iterator _removed_end = 
+    std::vector<ServerNode>::iterator _removed_end =
         std::set_difference(_last_servers.begin(), _last_servers.end(),
                             _servers.begin(), _servers.end(),
                             _removed.begin());
@@ -125,6 +126,7 @@ void NamingServiceThread::Actions::ResetServers(
         //       Socket. SocketMapKey may be passed through AddWatcher. Make sure
         //       to pick those Sockets with the right settings during OnAddedServers
         const SocketMapKey key(_added[i], _owner->_options.channel_signature);
+        // 创建套接字等。存储，channel_signature保证id唯一
         CHECK_EQ(0, SocketMapInsert(key, &tagged_id.id, _owner->_options.ssl_ctx,
                                     _owner->_options.use_rdma));
         _added_sockets.push_back(tagged_id);
@@ -141,10 +143,12 @@ void NamingServiceThread::Actions::ResetServers(
 
     // Refresh sockets
     if (_removed_sockets.empty()) {
+        // 上一次不变+这次新增的
         _sockets = _owner->_last_sockets;
     } else {
         std::sort(_removed_sockets.begin(), _removed_sockets.end());
         _sockets.resize(_owner->_last_sockets.size());
+        // 差集减去移除的数据
         std::vector<ServerNodeWithId>::iterator _sockets_end =
             std::set_difference(
                 _owner->_last_sockets.begin(), _owner->_last_sockets.end(),
@@ -152,6 +156,7 @@ void NamingServiceThread::Actions::ResetServers(
                 _sockets.begin());
         _sockets.resize(_sockets_end - _sockets.begin());
     }
+    // 新增sockets
     if (!_added_sockets.empty()) {
         const size_t before_added = _sockets.size();
         std::sort(_added_sockets.begin(), _added_sockets.end());
@@ -172,12 +177,14 @@ void NamingServiceThread::Actions::ResetServers(
                  it = _owner->_watchers.begin();
              it != _owner->_watchers.end(); ++it) {
             if (!_removed_sockets.empty()) {
+                // 同步lb移除结点
                 it->first->OnRemovedServers(removed_ids);
             }
 
             std::vector<ServerId> added_ids;
             ServerNodeWithId2ServerId(_added_sockets, &added_ids, it->second);
             if (!_added_sockets.empty()) {
+                // 同步lb增加结点
                 it->first->OnAddedServers(added_ids);
             }
         }
@@ -187,12 +194,13 @@ void NamingServiceThread::Actions::ResetServers(
         // TODO: Remove all Sockets that have the same address in SocketMapKey.peer
         //       We may need another data structure to avoid linear cost
         const SocketMapKey key(_removed[i], _owner->_options.channel_signature);
+        // 全局的数据移除。套接字，健康检查移除
         SocketMapRemove(key);
     }
 
     if (!_removed.empty() || !_added.empty()) {
         std::ostringstream info;
-        info << butil::class_name_str(*_owner->_ns) << "(\"" 
+        info << butil::class_name_str(*_owner->_ns) << "(\""
              << _owner->_service_name << "\"):";
         if (!_added.empty()) {
             info << " added "<< _added.size();
@@ -342,6 +350,7 @@ int NamingServiceThread::AddWatcher(NamingServiceWatcher* watcher,
         return -1;
     }
     BAIDU_SCOPED_LOCK(_mutex);
+    // filter不为空，那么久过滤掉last_sockets的数据
     if (_watchers.emplace(watcher, filter).second) {
         if (!_last_sockets.empty()) {
             std::vector<ServerId> added_ids;
@@ -352,7 +361,7 @@ int NamingServiceThread::AddWatcher(NamingServiceWatcher* watcher,
     }
     return -1;
 }
-    
+
 int NamingServiceThread::RemoveWatcher(NamingServiceWatcher* watcher) {
     if (watcher == NULL) {
         LOG(ERROR) << "Param[watcher] is NULL";

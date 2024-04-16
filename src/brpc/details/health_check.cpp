@@ -205,6 +205,7 @@ bool HealthCheckTask::OnTriggeringTask(timespec* next_abstime) {
     } else {
         hc = ptr->CheckHealth();
     }
+    // 连接成功，关闭healthcheck
     if (hc == 0) {
         if (ptr->CreatedByConnect()) {
             g_vars->channel_conn << -1;
@@ -220,11 +221,12 @@ bool HealthCheckTask::OnTriggeringTask(timespec* next_abstime) {
         }
         ptr->AfterHCCompleted();
         return false;
-    } else if (hc == ESTOP) {
+    } else if (hc == ESTOP) { // bthread error
         LOG(INFO) << "Cancel checking " << *ptr;
         ptr->AfterHCCompleted();
         return false;
     }
+    // 失败继续健康检查
     ++ ptr->_hc_count;
     *next_abstime = butil::seconds_from_now(ptr->_health_check_interval_s);
     return true;

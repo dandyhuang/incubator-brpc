@@ -64,7 +64,10 @@ namespace bvar {
 // bvar::Adder<MyType> my_type_sum;
 // my_type_sum << MyType(1) << MyType(2) << MyType(3);
 // LOG(INFO) << my_type_sum;  // "MyType{6}"
-
+// template <typename ResultTp, typename ElementTp, typename BinaryOp>
+// explicit AgentCombiner(const ResultTp result_identity = ResultTp(),
+//                            const ElementTp element_identity = ElementTp(),
+//                            const BinaryOp& op = BinaryOp())
 template <typename T, typename Op, typename InvOp = detail::VoidOp>
 class Reducer : public Variable {
 public:

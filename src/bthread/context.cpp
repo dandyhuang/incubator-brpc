@@ -442,6 +442,33 @@ __asm (
 "    movq  %rdx, %rdi\n"
 "    jmp  *%r8\n"
 );
+/*
+337-342行为将对应寄存器push到旧的协程栈中
+
+将rsp下移8字节
+
+比较rcx和0，因为rcx为0，所以zf为1
+
+因为zf为1，所以跳转
+
+将rsp保存至rdi中，rsp指向当前协程栈栈顶，rdi为第一个入参，即ofc
+
+将rsi保存到rsp中，rsi为第二个参数，即nfc，此时栈顶指针rsp指向了新的协程栈
+
+
+
+将rsp上移8字节
+
+将协程栈中r12-rbp依次pop到对应寄存器
+
+将rdx保存到rax，rdx为第三个参数，rax为返回值
+
+将rdx保存到rdi，rdi为第一个入参，因此将作为新协程运行的入参
+
+跳转到r8对应的寄存器运行。
+————————————————
+原文链接：https://blog.csdn.net/KIDGIN7439/article/details/106426635
+*/
 
 #endif
 
@@ -466,6 +493,28 @@ __asm (
 "    call  __exit\n"
 "    hlt\n"
 );
+/*
+将rdi赋值给rax，rdi保存的是第一个参数，即stack的bottom
+
+对rax进行 16字节对齐
+
+将rax下移72字节
+
+将rdx保存至rax + 56，rdx为第三个参数，即函数fn的地址
+
+保存MXCSR寄存器(sse浮点数运算状态寄存器，32位)到rax所在位置
+
+将 FPU 控制字的当前值存储到rax + 4
+
+计算finish的绝对地址，保存到rcx中
+
+将rcx保存到rax + 64
+
+函数退出
+
+rax保存的是栈顶，因此context现在指向协程栈的栈顶
+原文链接：https://blog.csdn.net/KIDGIN7439/article/details/106426635
+*/
 
 #endif
 

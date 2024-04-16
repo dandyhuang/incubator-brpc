@@ -73,11 +73,11 @@ DEFINE_bool(log_idle_connection_close, false,
             "Print log when an idle connection is closed");
 BRPC_VALIDATE_GFLAG(log_idle_connection_close, PassValidate);
 
-DEFINE_int32(socket_recv_buffer_size, -1, 
+DEFINE_int32(socket_recv_buffer_size, -1,
             "Set the recv buffer size of socket if this value is positive");
 
 // Default value of SNDBUF is 2500000 on most machines.
-DEFINE_int32(socket_send_buffer_size, -1, 
+DEFINE_int32(socket_send_buffer_size, -1,
             "Set send buffer size of sockets if this value is positive");
 
 DEFINE_int32(ssl_bio_buffer_size, 16*1024, "Set buffer size for SSL read/write");
@@ -119,14 +119,14 @@ public:
     // Get an address-able socket. If the pool is empty, create one.
     // Returns 0 on success.
     int GetSocket(SocketUniquePtr* ptr);
-    
+
     // Return a socket (which was returned by GetSocket) back to the pool,
     // if the pool is full, setfail the socket directly.
     void ReturnSocket(Socket* sock);
-    
+
     // Get all pooled sockets inside.
     void ListSockets(std::vector<SocketId>* list, size_t max_count);
-    
+
 private:
     // options used to create this instance
     SocketOptions _options;
@@ -174,7 +174,7 @@ public:
     // which has the disadvantage that accesses to different pools contend
     // with each other.
     butil::atomic<SocketPool*> socket_pool;
-    
+
     // The socket newing this object.
     SocketId creator_socket_id;
 
@@ -245,7 +245,7 @@ void Socket::SharedPart::UpdateStatsEverySecond(int64_t now_ms) {
     stat->in_num_messages_s = in_nmsg - stat->last_in_num_messages;
     stat->out_size_s = out_sz - stat->last_out_size;
     stat->out_num_messages_s = out_nmsg - stat->last_out_num_messages;
-    
+
     stat->last_in_size = in_sz;
     stat->last_in_num_messages = in_nmsg;
     stat->last_out_size = out_sz;
@@ -307,12 +307,12 @@ const uint32_t MAX_PIPELINED_COUNT = 16384;
 
 struct BAIDU_CACHELINE_ALIGNMENT Socket::WriteRequest {
     static WriteRequest* const UNCONNECTED;
-    
+
     butil::IOBuf data;
     WriteRequest* next;
     bthread_id_t id_wait;
     Socket* socket;
-    
+
     uint32_t pipelined_count() const {
         return (_pc_and_udmsg >> 48) & 0x3FFF;
     }
@@ -353,7 +353,7 @@ struct BAIDU_CACHELINE_ALIGNMENT Socket::WriteRequest {
 
     // Register pipelined_count and user_message
     void Setup(Socket* s);
-    
+
 private:
     uint64_t _pc_and_udmsg;
 };
@@ -407,7 +407,7 @@ public:
             timer_id = 0;
         }
     }
-    
+
     void BeforeRecycle(Socket*) {
         // Recycle itself
         delete this;
@@ -566,16 +566,18 @@ int Socket::ResetFileDescriptor(int fd) {
 
     if (FLAGS_socket_send_buffer_size > 0) {
         int buff_size = FLAGS_socket_send_buffer_size;
-        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buff_size, sizeof(buff_size)) != 0) {
-            PLOG(ERROR) << "Fail to set sndbuf of fd=" << fd << " to "
+        socklen_t size = sizeof(buff_size);
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buff_size, size) != 0) {
+            PLOG(FATAL) << "Fail to set sndbuf of fd=" << fd << " to "
                         << buff_size;
         }
     }
 
     if (FLAGS_socket_recv_buffer_size > 0) {
         int buff_size = FLAGS_socket_recv_buffer_size;
-        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buff_size, sizeof(buff_size)) != 0) {
-            PLOG(ERROR) << "Fail to set rcvbuf of fd=" << fd << " to "
+        socklen_t size = sizeof(buff_size);
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buff_size, size) != 0) {
+            PLOG(FATAL) << "Fail to set rcvbuf of fd=" << fd << " to "
                         << buff_size;
         }
     }
@@ -583,8 +585,8 @@ int Socket::ResetFileDescriptor(int fd) {
     EnableKeepaliveIfNeeded(fd);
 
     if (_on_edge_triggered_events) {
-        if (GetGlobalEventDispatcher(fd, _bthread_tag).AddConsumer(id(), fd) != 0) {
-            PLOG(ERROR) << "Fail to add SocketId=" << id() 
+        if (GetGlobalEventDispatcher(fd).AddConsumer(id(), fd) != 0) {
+            PLOG(ERROR) << "Fail to add SocketId=" << id()
                         << " into EventDispatcher";
             _fd.store(-1, butil::memory_order_release);
             return -1;
@@ -751,7 +753,7 @@ int Socket::Create(const SocketOptions& options, SocketId* id) {
     if (m->ResetFileDescriptor(options.fd) != 0) {
         const int saved_errno = errno;
         PLOG(ERROR) << "Fail to ResetFileDescriptor";
-        m->SetFailed(saved_errno, "Fail to ResetFileDescriptor: %s", 
+        m->SetFailed(saved_errno, "Fail to ResetFileDescriptor: %s",
                      berror(saved_errno));
         return -1;
     }
@@ -777,7 +779,7 @@ int Socket::WaitAndReset(int32_t expected_nref) {
                 return -1;
             }
         } else if (NRefOfVRef(vref) < expected_nref) {
-            RPC_VLOG << "SocketId=" << _this_id 
+            RPC_VLOG << "SocketId=" << _this_id
                      << " was abandoned during health checking";
             return -1;
         } else {
@@ -816,7 +818,7 @@ int Socket::WaitAndReset(int32_t expected_nref) {
     if (_ssl_session) {
         SSL_free(_ssl_session);
         _ssl_session = NULL;
-    }        
+    }
     _ssl_state = SSL_UNKNOWN;
     _nevent.store(0, butil::memory_order_relaxed);
     // parsing_context is very likely to be associated with the fd,
@@ -860,7 +862,7 @@ void Socket::Revive() {
     _additional_ref_status.store(REF_REVIVING, butil::memory_order_relaxed);
     while (1) {
         CHECK_EQ(id_ver + 1, VersionOfVRef(vref));
-        
+
         int32_t nref = NRefOfVRef(vref);
         if (nref <= 1) {
             // Set status to REF_RECYLED since no one uses this socket
@@ -958,12 +960,13 @@ int Socket::SetFailed(int error_code, const char* error_fmt, ...) {
             _error_code = error_code;
             _error_text = error_text;
             pthread_mutex_unlock(&_id_wait_list_mutex);
-            
+
             // Do health-checking even if we're not connected before, needed
             // by Channel to revive never-connected socket when server side
             // comes online.
             if (HCEnabled()) {
                 bool expect = false;
+                // health_check后，_hc_started会设置为false
                 if (_hc_started.compare_exchange_strong(expect,
                                                         true,
                                                         butil::memory_order_relaxed,
@@ -1126,7 +1129,7 @@ void Socket::OnRecycle() {
 
     _auth_flag_error.store(0, butil::memory_order_relaxed);
     bthread_id_error(_auth_id, 0);
-    
+
     bthread_id_list_destroy(&_id_wait_list);
 
     if (_ssl_session) {
@@ -1135,7 +1138,7 @@ void Socket::OnRecycle() {
     }
 
     _ssl_ctx = NULL;
-    
+
     delete _pipeline_q;
     _pipeline_q = NULL;
 
@@ -1152,7 +1155,7 @@ void Socket::OnRecycle() {
             ptr->ReleaseAdditionalReference();
         }
     }
-    
+
     g_vars->nsocket << -1;
 }
 
@@ -1174,6 +1177,8 @@ void* Socket::ProcessEvent(void* arg) {
 bool Socket::IsWriteComplete(Socket::WriteRequest* old_head,
                              bool singular_node,
                              Socket::WriteRequest** new_tail) {
+    // old_head只有两种可能：1、指向持有写权限的bthread携带的WriteRequest，2、指向上一轮经过翻转的链表的尾节点。
+    // 不论是哪两种，old_head指向的WriteRequest的next必然是NULL。
     CHECK(NULL == old_head->next);
     // Try to set _write_head to NULL to mark that the write is done.
     WriteRequest* new_head = old_head;
@@ -1184,6 +1189,10 @@ bool Socket::IsWriteComplete(Socket::WriteRequest* old_head,
         // Write is obviously not complete if old_head is not fully written.
         return_when_no_more = false;
     }
+    // 1、如果之前翻转的链表已全部写完，则将_write_head置为NULL，当前的KeepWrite bthread也即将结束；
+    // 2、如果之前翻转的链表未全部写完，且暂时无其他bthread向_write_head新增待写数据，_write_head指针保存原值；
+    // 3、如果之前翻转的链表未全部写完，且已经有其他bthread向_write_head新增待写数据，将new_head的值置为当前
+    //    最新的_write_head值，为后续的链表翻转做准备。
     if (_write_head.compare_exchange_strong(
             new_head, desired, butil::memory_order_acquire)) {
         // No one added new requests.
@@ -1205,6 +1214,7 @@ bool Socket::IsWriteComplete(Socket::WriteRequest* old_head,
             // TODO(gejun): elaborate this
             sched_yield();
         }
+        // 链表翻转
         WriteRequest* const saved_next = p->next;
         p->next = tail;
         tail = p;
@@ -1220,6 +1230,7 @@ bool Socket::IsWriteComplete(Socket::WriteRequest* old_head,
     for (WriteRequest* q = tail; q; q = q->next) {
         q->Setup(this);
     }
+    // 将*new_tail指向当前最新的已翻转链表的尾节点。
     if (new_tail) {
         *new_tail = new_head;
     }
@@ -1273,7 +1284,7 @@ int Socket::Connect(const timespec* abstime,
     CHECK_EQ(0, butil::make_close_on_exec(sockfd));
     // We need to do async connect (to manage the timeout by ourselves).
     CHECK_EQ(0, butil::make_non_blocking(sockfd));
-    
+
     const int rc = ::connect(
         sockfd, (struct sockaddr*)&serv_addr, addr_size);
     if (rc != 0 && errno != EINPROGRESS) {
@@ -1317,7 +1328,7 @@ int Socket::Connect(const timespec* abstime,
                          (int)sockfd, berror(saved_errno));
             return -1;
         }
-        
+
         // Register a timer for EpollOutRequest. Note that the timeout
         // callback has no race with the one above as both of them try
         // to `SetFailed' `connect_id' while only one of them can succeed
@@ -1334,7 +1345,7 @@ int Socket::Connect(const timespec* abstime,
                 return -1;
             }
         }
-        
+
     } else {
         if (WaitEpollOut(sockfd, false, abstime) != 0) {
             PLOG(WARNING) << "Fail to wait EPOLLOUT of fd=" << sockfd;
@@ -1347,14 +1358,15 @@ int Socket::Connect(const timespec* abstime,
     return sockfd.release();
 }
 
-int Socket::CheckConnected(int sockfd) {    
+int Socket::CheckConnected(int sockfd) {
     if (sockfd == STREAM_FAKE_FD) {
         return 0;
     }
     int err = 0;
     socklen_t errlen = sizeof(err);
+    // 获取套接字的错误状态
     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) < 0) {
-        PLOG(ERROR) << "Fail to getsockopt of fd=" << sockfd; 
+        PLOG(ERROR) << "Fail to getsockopt of fd=" << sockfd;
         return -1;
     }
     if (err != 0) {
@@ -1396,7 +1408,7 @@ int Socket::ConnectIfNot(const timespec* abstime, WriteRequest* req) {
         }
     }
     s.release();
-    return 1;    
+    return 1;
 }
 
 void Socket::WakeAsEpollOut() {
@@ -1419,11 +1431,11 @@ int Socket::HandleEpollOut(SocketId id) {
     if (req != NULL) {
         return s->HandleEpollOutRequest(0, req);
     }
-    
+
     // Currently `WaitEpollOut' needs `_epollout_butex'
     // TODO(jiangrujie): Remove this in the future
     s->_epollout_butex->fetch_add(1, butil::memory_order_relaxed);
-    bthread::butex_wake_except(s->_epollout_butex, 0);  
+    bthread::butex_wake_except(s->_epollout_butex, 0);
     return 0;
 }
 
@@ -1541,7 +1553,7 @@ void Socket::CheckConnectedAndKeepWrite(int fd, int err, void* data) {
         AfterAppConnected(err, req);
     }
 }
-     
+
 inline int SetError(bthread_id_t id_wait, int ec) {
     if (id_wait != INVALID_BTHREAD_ID) {
         bthread_id_error(id_wait, ec);
@@ -1636,11 +1648,11 @@ int Socket::Write(SocketMessagePtr<>& msg, const WriteOptions* options_in) {
             return rc;
         }
     }
-    
+
     if (!opt.ignore_eovercrowded && _overcrowded) {
         return SetError(opt.id_wait, EOVERCROWDED);
     }
-    
+
     WriteRequest* req = butil::get_object<WriteRequest>();
     if (!req) {
         return SetError(opt.id_wait, ENOMEM);
@@ -1656,6 +1668,9 @@ int Socket::Write(SocketMessagePtr<>& msg, const WriteOptions* options_in) {
 
 int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
     // Release fence makes sure the thread getting request sees *req
+    // 与当前_write_head做原子交换，_write_head初始值是NULL，
+    // 如果是第一个写fd的线程，则exchange返回NULL，并将_write_head指向第一个线程的待写数据，
+    // 如果不是第一个写fd的线程，exchange返回值是非NULL，且将_write_head指向最新到来的待写数据。
     WriteRequest* const prev_head =
         _write_head.exchange(req, butil::memory_order_release);
     if (prev_head != NULL) {
@@ -1664,6 +1679,7 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
         // lock-free, but the duration is so short(1~2 instructions,
         // depending on compiler) that the spin rarely occurs in practice
         // (I've not seen any spin in highly contended tests).
+        // 如果不是第一个写fd的bthread，将待写数据加入链表后，就返回。
         req->next = prev_head;
         return 0;
     }
@@ -1674,9 +1690,12 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
     ssize_t nw = 0;
 
     // We've got the right to write.
+    // req指向的是第一个待写数据，肯定是以_write_head为头部的链表的尾结点，next一定是NULL。
     req->next = NULL;
-    
+
     // Connect to remote_side() if not.
+    // 如果TCP连接未建立，则在ConnectIfNot内部执行非阻塞的connect，并将自身挂起，
+    // 等待epoll通知连接已建立后再被唤醒执行。
     int ret = ConnectIfNot(opt.abstime, req);
     if (ret < 0) {
         saved_errno = errno;
@@ -1685,6 +1704,7 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
     } else if (ret == 1) {
         // We are doing connection. Callback `KeepWriteIfConnected'
         // will be called with `req' at any moment after
+        // TCP连接建立中，bthread返回、挂起，等待唤醒。
         return 0;
     }
 
@@ -1692,15 +1712,17 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
     // which is assumed to run before any SocketMessage.AppendAndDestroySelf()
     // in some protocols(namely RTMP).
     req->Setup(this);
-    
-    if (opt.write_in_background || ssl_state() != SSL_OFF) {
+
+    if (ssl_state() != SSL_OFF) {
         // Writing into SSL may block the current bthread, always write
         // in the background.
         goto KEEPWRITE_IN_BACKGROUND;
     }
-    
+
     // Write once in the calling thread. If the write is not complete,
     // continue it in KeepWrite thread.
+    // 向fd写入数据，这里只关心req指向的数据，不关心其他bthread加入_write_head链表的数据。
+    // 不一定能一次写完，可能req指向的数据只写入了一部分。
     if (_conn) {
         butil::IOBuf* data_arr[1] = { &req->data };
         nw = _conn->CutMessageIntoFileDescriptor(fd(), data_arr, 1);
@@ -1713,6 +1735,7 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
 #else
         {
 #endif
+            // 写入数据
             nw = req->data.cut_into_file_descriptor(fd());
         }
     }
@@ -1722,14 +1745,18 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
             saved_errno = errno;
             // EPIPE is common in pooled connections + backup requests.
             PLOG_IF(WARNING, errno != EPIPE) << "Fail to write into " << *this;
-            SetFailed(saved_errno, "Fail to write into %s: %s", 
+            SetFailed(saved_errno, "Fail to write into %s: %s",
                       description().c_str(), berror(saved_errno));
             goto FAIL_TO_WRITE;
         }
     } else {
         AddOutputBytes(nw);
     }
+    // 判断req指向的数据是否已写完。
+    // 在IsWriteComplete内部会判断，如果req指向的数据已全部写完，且当前时刻req是唯一待写入的数据，
+    // 则IsWriteComplete返回true。
     if (IsWriteComplete(req, true, NULL)) {
+        // 回收req指向的heap内存到对象池，bthread完成任务，返回。
         ReturnSuccessfulWriteRequest(req);
         return 0;
     }
@@ -1737,6 +1764,10 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
 KEEPWRITE_IN_BACKGROUND:
     ReAddress(&ptr_for_keep_write);
     req->socket = ptr_for_keep_write.release();
+    // req指向的数据未全部写完，为了使pthread wait-free，启动KeepWrite bthread后，当前bthread就返回。
+    // 在KeepWrite bthread内部，不仅需要处理当前req未写完的数据，还可能要处理其他bthread加入链表的数据。
+    // KeepWrite bthread并不具有最高的优先级，所以使用bthread_start_background，将KeepWrite bthread的
+    // tid加到执行队列尾部。
     if (bthread_start_background(&th, &BTHREAD_ATTR_NORMAL,
                                  KeepWrite, req) != 0) {
         LOG(FATAL) << "Fail to start KeepWrite";
@@ -1766,14 +1797,23 @@ void* Socket::KeepWrite(void* void_arg) {
     WriteRequest* cur_tail = NULL;
     do {
         // req was written, skip it.
+        // 如果req的next指针不为NULL，则已经调用过IsWriteComplete实现了单向链表的翻转，
+        // 待写数据的顺序已按到达序排列。
+        // 所以如果req的next指针不为NULL且req的数据已写完，可以即刻回收req指向的内存，
+        // 并将req重新赋值为下一个待写数据的指针。
         if (req->next != NULL && req->data.empty()) {
+            // 执行到这里，就是因为虽然req指向的WriteRequest中的数据已写完，
+            // 但_write_head链表中又被其他bthread加入了待写数据。
             WriteRequest* const saved_req = req;
             req = req->next;
             s->ReturnSuccessfulWriteRequest(saved_req);
         }
+        // 向fd写入一次数据，DoWrite内部的实现为尽可能的多谢，可以连带req后面的待写数据一起写。
         const ssize_t nw = s->DoWrite(req);
         if (nw < 0) {
             if (errno != EAGAIN && errno != EOVERCROWDED) {
+                // 如果不是因为内核inode输出缓存已满导致的write操作结果小于0，
+                // 则标记Socket对象状态异常（TCP连接异常）。
                 const int saved_errno = errno;
                 PLOG(WARNING) << "Fail to keep-write into " << *s;
                 s->SetFailed(saved_errno, "Fail to keep-write into %s: %s",
@@ -1784,6 +1824,8 @@ void* Socket::KeepWrite(void* void_arg) {
             s->AddOutputBytes(nw);
         }
         // Release WriteRequest until non-empty data or last request.
+        // 可能一次写入了链表中多个节点中的待写数据，数据已写完的节点回收内存。
+        // while操作结束后req指向的是已翻转的链表中的第一个数据未写完的节点。
         while (req->next != NULL && req->data.empty()) {
             WriteRequest* const saved_req = req;
             req = req->next;
@@ -1830,8 +1872,14 @@ void* Socket::KeepWrite(void* void_arg) {
 #else
             {
 #endif
+                // 执行到这里，nw小于0的原因肯定是因为内核inode输出缓存已满。
+                // 如果是由于fd的inode输出缓冲区已满导致write操作返回值小于等于0，则需要挂起执行KeepWrite的
+                // bthread，让出cpu，让该bthread所在的pthread去任务队列中取出下一个bthread去执行。
+                // 等到epoll返回告知inode输出缓冲区有可写空间时，再唤起执行KeepWrite的bthread，继续向fd写入数据。
                 g_vars->nwaitepollout << 1;
                 bool pollin = (s->_on_edge_triggered_events != NULL);
+                // 在WaitEpollOut内部会执行butex_wait，挂起当前bthread。当bthread重新执行时，执行点是
+                // butex_wait的函数返回点。
                 const int rc = s->WaitEpollOut(s->fd(), pollin, &duetime);
                 if (rc < 0 && errno != ETIMEDOUT) {
                     const int saved_errno = errno;
@@ -1842,14 +1890,18 @@ void* Socket::KeepWrite(void* void_arg) {
                 }
             }
         }
+        // 令cur_tail找到已翻转链表的尾节点。
         if (NULL == cur_tail) {
             for (cur_tail = req; cur_tail->next != NULL;
                  cur_tail = cur_tail->next);
         }
         // Return when there's no more WriteRequests and req is completely
         // written.
+        // 执行到这里，cur_tail指向的是当前已被翻转的链表的尾节点。
         if (s->IsWriteComplete(cur_tail, (req == cur_tail), &cur_tail)) {
             CHECK_EQ(cur_tail, req);
+            // 回收内存后KeepWrite bthread就结束了，后续再有线程向fd写数据，则重复以前的逻辑。
+            // 所以同一时刻只会存在一个KeepWrite bthread。
             s->ReturnSuccessfulWriteRequest(req);
             return NULL;
         }
@@ -2012,7 +2064,7 @@ int Socket::SSLHandshake(int fd, bool server_mode) {
                 return -1;
             }
             break;
- 
+
         default: {
             const unsigned long e = ERR_get_error();
             if (ssl_error == SSL_ERROR_ZERO_RETURN || e == 0) {
@@ -2053,7 +2105,7 @@ ssize_t Socket::DoRead(size_t size_hint) {
         case SSL_CONNECTED:
             CHECK(false) << "Impossible to reach here";
             break;
-            
+
         case SSL_OFF:
             break;
         }
@@ -2078,12 +2130,12 @@ ssize_t Socket::DoRead(size_t size_hint) {
     switch (ssl_error) {
     case SSL_ERROR_NONE:  // `nr' > 0
         break;
-            
+
     case SSL_ERROR_WANT_READ:
         // Regard this error as EAGAIN
         errno = EAGAIN;
         break;
-            
+
     case SSL_ERROR_WANT_WRITE:
         // Disable renegotiation
         errno = EPROTO;
@@ -2134,7 +2186,7 @@ int Socket::FightAuthentication(int* auth_error) {
 }
 
 void Socket::SetAuthentication(int error_code) {
-    uint64_t expected = 0;       
+    uint64_t expected = 0;
     // `bthread_id_destroy' has release fence to prevent this CAS being
     // reordered after it.
     if (_auth_flag_error.compare_exchange_strong(
@@ -2508,6 +2560,7 @@ int Socket::CheckHealth() {
     const timespec duetime =
         butil::milliseconds_from_now(FLAGS_health_check_timeout_ms);
     const int connected_fd = Connect(&duetime, NULL, NULL);
+    // 尝试建立连接，成功关闭临时fd，on_connect == NULL
     if (connected_fd >= 0) {
         ::close(connected_fd);
         return 0;
@@ -2547,12 +2600,12 @@ void Socket::ResetAllStreams() {
     _stream_mutex.lock();
     if (_stream_set != NULL) {
         // Not delete _stream_set because there are likely more streams added
-        // after reviving if the Socket is still in use, or it is to be deleted in 
+        // after reviving if the Socket is still in use, or it is to be deleted in
         // OnRecycle()
         saved_stream_set.swap(*_stream_set);
     }
     _stream_mutex.unlock();
-    for (std::set<StreamId>::const_iterator 
+    for (std::set<StreamId>::const_iterator
             it = saved_stream_set.begin(); it != saved_stream_set.end(); ++it) {
         Stream::SetFailed(*it);
     }
@@ -2653,7 +2706,7 @@ inline void SocketPool::ReturnSocket(Socket* sock) {
 
 inline void SocketPool::ListSockets(std::vector<SocketId>* out, size_t max_count) {
     out->clear();
-    // NOTE: size() of vector is thread-unsafe and may return a very 
+    // NOTE: size() of vector is thread-unsafe and may return a very
     // large value during resizing.
     _mutex.lock();
     size_t expected_size = _pool.size();
@@ -2809,7 +2862,7 @@ bool Socket::GetPooledSocketStats(int* numfree, int* numinflight) {
     *numinflight = pool->_numinflight.load(butil::memory_order_relaxed);
     return true;
 }
-    
+
 int Socket::GetShortSocket(SocketUniquePtr* short_socket) {
     if (short_socket == NULL) {
         LOG(ERROR) << "short_socket is NULL";

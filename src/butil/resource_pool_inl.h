@@ -42,7 +42,7 @@
 #endif
 
 namespace butil {
-    
+
 template <typename T>
 struct ResourceId {
     uint64_t value;
@@ -58,13 +58,13 @@ struct ResourceId {
     }
 };
 
-template <typename T, size_t NITEM> 
+template <typename T, size_t NITEM>
 struct ResourcePoolFreeChunk {
     size_t nfree;
     ResourceId<T> ids[NITEM];
 };
 // for gcc 3.4.5
-template <typename T> 
+template <typename T>
 struct ResourcePoolFreeChunk<T, 0> {
     size_t nfree;
     ResourceId<T> ids[0];
@@ -163,16 +163,20 @@ public:
         // and "new T" are different: former one sets all fields to 0 which
         // we don't want.
 #define BAIDU_RESOURCE_POOL_GET(CTOR_ARGS)                              \
-        /* Fetch local free id */                                       \
+        /* Fetch local free id */
+        /* 如果线程私有的空闲对象列表当前存有空闲对象，则直接从空闲列表拿出一个空闲对象的id。*/                                      \
         if (_cur_free.nfree) {                                          \
             const ResourceId<T> free_id = _cur_free.ids[--_cur_free.nfree]; \
             *id = free_id;                                              \
             BAIDU_RESOURCE_POOL_FREE_ITEM_NUM_SUB1;                   \
+            // 使用对象id在O(1)时间内定位到空闲对象的地址，并返回。
             return unsafe_address_resource(free_id);                    \
         }                                                               \
         /* Fetch a FreeChunk from global.                               \
            TODO: Popping from _free needs to copy a FreeChunk which is  \
            costly, but hardly impacts amortized performance. */         \
+        // 线程私有的空闲对象列表没有空闲对象可用，从全局的空闲列表队列中弹出一个空闲对象列表，
+        // 弹出的空闲对象列表存满了已被回收的空闲对象的id，将弹出的空闲对象列表的内容拷贝到线程私有空闲对象列表。
         if (_pool->pop_free_chunk(_cur_free)) {                         \
             --_cur_free.nfree;                                          \
             const ResourceId<T> free_id =  _cur_free.ids[_cur_free.nfree]; \
@@ -180,8 +184,14 @@ public:
             BAIDU_RESOURCE_POOL_FREE_ITEM_NUM_SUB1;                   \
             return unsafe_address_resource(free_id);                    \
         }                                                               \
-        /* Fetch memory from local block */                             \
+        /* Fetch memory from local block */
+        // 全局都没有空闲对象可用，如果此时线程私有的Block中有剩余空间可用，则从私有的Block中分配一块内存给新建对象。
         if (_cur_block && _cur_block->nitem < BLOCK_NITEM) {            \
+            // _cur_block_index是当前的Block在全局所有的Block中的索引号，
+         // BLOCK_NITEM是一个Block中最大能存储的对象的个数（一个Block中存储的所有对象肯定是同一类型的），
+         // _cur_block->nitem是线程私有的Block中已经分配内存的对象个数（对象可能是正在使用，也可能是已经被回收），
+         // 所以一个新分配内存的对象的id值就等于当前全局已被分配内存的所有对象的个数，即新对象所占内存空间在全局
+         // 对象池中的偏移量。
             id->value = _cur_block_index * BLOCK_NITEM + _cur_block->nitem; \
             T* p = new ((T*)_cur_block->items + _cur_block->nitem) T CTOR_ARGS; \
             if (!ResourcePoolValidator<T>::validate(p)) {               \
@@ -192,6 +202,8 @@ public:
             return p;                                                   \
         }                                                               \
         /* Fetch a Block from global */                                 \
+        // 线程私有的Block已用满，再从该类型对象的全局内存区中再申请一块Block。
+        // 初始为null，index为0
         _cur_block = add_block(&_cur_block_index);                      \
         if (_cur_block != NULL) {                                       \
             id->value = _cur_block_index * BLOCK_NITEM + _cur_block->nitem; \
@@ -204,7 +216,7 @@ public:
             return p;                                                   \
         }                                                               \
         return NULL;                                                    \
- 
+
 
         inline T* get(ResourceId<T>* id) {
             BAIDU_RESOURCE_POOL_GET();
@@ -324,7 +336,7 @@ public:
         const size_t n = ResourcePoolFreeChunkMaxItem<T>::value();
         return n < FREE_CHUNK_NITEM ? n : FREE_CHUNK_NITEM;
     }
-    
+
     // Number of all allocated objects, including being used and free.
     ResourcePoolInfo describe_resources() const {
         ResourcePoolInfo info;
@@ -363,11 +375,12 @@ public:
             return p;
         }
         pthread_mutex_lock(&_singleton_mutex);
+         // double check，需要再次检查_singleton指针是否为空。
         p = _singleton.load(butil::memory_order_consume);
         if (!p) {
             p = new ResourcePool();
             _singleton.store(p, butil::memory_order_release);
-        } 
+        }
         pthread_mutex_unlock(&_singleton_mutex);
         return p;
     }
@@ -436,6 +449,7 @@ private:
     }
 
     inline LocalPool* get_or_new_local_pool() {
+        // thread local变量tls
         LocalPool* lp = _local_pool;
         if (lp != NULL) {
             return lp;
@@ -446,6 +460,7 @@ private:
         }
         BAIDU_SCOPED_LOCK(_change_thread_mutex); //avoid race with clear()
         _local_pool = lp;
+        // 新建成功后，登记一个pthread退出后删除_local_pool的函数
         butil::thread_atexit(LocalPool::delete_local_pool, lp);
         _nlocal.fetch_add(1, butil::memory_order_relaxed);
         return lp;
@@ -460,9 +475,9 @@ private:
         }
 
         // Can't delete global even if all threads(called ResourcePool
-        // functions) quit because the memory may still be referenced by 
+        // functions) quit because the memory may still be referenced by
         // other threads. But we need to validate that all memory can
-        // be deallocated correctly in tests, so wrap the function with 
+        // be deallocated correctly in tests, so wrap the function with
         // a macro which is only defined in unittests.
 #ifdef BAIDU_CLEAR_RESOURCE_POOL_AFTER_ALL_THREADS_QUIT
         BAIDU_SCOPED_LOCK(_change_thread_mutex);  // including acquire fence.
@@ -538,7 +553,7 @@ private:
         pthread_mutex_unlock(&_free_chunks_mutex);
         return true;
     }
-    
+
     static butil::static_atomic<ResourcePool*> _singleton;
     static pthread_mutex_t _singleton_mutex;
     static BAIDU_THREAD_LOCAL LocalPool* _local_pool;

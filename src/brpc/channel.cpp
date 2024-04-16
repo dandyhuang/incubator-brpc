@@ -108,7 +108,7 @@ static ChannelSignature ComputeChannelSignature(const ChannelOptions& opt) {
         }
         butil::MurmurHash3_x64_128_Update(&mm_ctx, buf.data(), buf.size());
         buf.clear();
-    
+
         if (opt.has_ssl_options()) {
             const CertInfo& cert = opt.ssl_options().client_cert;
             if (!cert.certificate.empty()) {
@@ -192,7 +192,7 @@ int Channel::InitChannelOptions(const ChannelOptions* options) {
         // Save has_error which will be overriden in later assignments to
         // connection_type.
         const bool has_error = _options.connection_type.has_error();
-        
+
         if (protocol->supported_connection_type & CONNECTION_TYPE_SINGLE) {
             _options.connection_type = CONNECTION_TYPE_SINGLE;
         } else if (protocol->supported_connection_type & CONNECTION_TYPE_POOLED) {
@@ -378,7 +378,7 @@ int Channel::Init(const char* ns_url,
                                                    LoadBalancerWithNaming);
     if (NULL == lb) {
         LOG(FATAL) << "Fail to new LoadBalancerWithNaming";
-        return -1;        
+        return -1;
     }
     GetNamingServiceThreadOptions ns_opt;
     ns_opt.succeed_without_server = _options.succeed_without_server;
@@ -416,6 +416,7 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
     cntl->OnRPCBegin(start_send_real_us);
     // Override max_retry first to reset the range of correlation_id
     if (cntl->max_retry() == UNSET_MAGIC_NUM) {
+        // 默认为3次
         cntl->set_max_retry(_options.max_retry);
     }
     if (cntl->max_retry() < 0) {
@@ -423,26 +424,32 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
         // in correlation_id. negative max_retry causes undefined behavior.
         cntl->set_max_retry(0);
     }
-    // HTTP needs this field to be set before any SetFailed()
+    // options.protocol = "baidu_std";
     cntl->_request_protocol = _options.protocol;
+    // 默认为空
     if (_options.protocol.has_param()) {
         CHECK(cntl->protocol_param().empty());
         cntl->protocol_param() = _options.protocol.param();
     }
+    // http协议
     if (_options.protocol == brpc::PROTOCOL_HTTP && (_scheme == "https" || _scheme == "http")) {
         URI& uri = cntl->http_request().uri();
         if (uri.host().empty() && !_service_name.empty()) {
             uri.SetHostAndPort(_service_name);
         }
     }
+    // 下次解析包协议更快
     cntl->_preferred_index = _preferred_index;
     cntl->_retry_policy = _options.retry_policy;
+    // 隔离熔断，后续专门分析
     if (_options.enable_circuit_breaker) {
         cntl->add_flag(Controller::FLAGS_ENABLED_CIRCUIT_BREAKER);
     }
+    // 错误处理，如重试，对冲请求，都按照这个处理
     const CallId correlation_id = cntl->call_id();
     const int rc = bthread_id_lock_and_reset_range(
                     correlation_id, NULL, 2 + cntl->max_retry());
+    // 在另一个rpc使用
     if (rc != 0) {
         CHECK_EQ(EINVAL, rc);
         if (!cntl->FailedInline()) {
@@ -485,7 +492,7 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
         span->set_start_send_us(start_send_us);
         cntl->_span = span;
     }
-    // Override some options if they haven't been set by Controller
+    // 超时设置
     if (cntl->timeout_ms() == UNSET_MAGIC_NUM) {
         cntl->set_timeout_ms(_options.timeout_ms);
     }
@@ -496,10 +503,12 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
     if (cntl->backup_request_ms() == UNSET_MAGIC_NUM) {
         cntl->set_backup_request_ms(_options.backup_request_ms);
     }
+    //  "single", "pooled", "short"
     if (cntl->connection_type() == CONNECTION_TYPE_UNKNOWN) {
         cntl->set_connection_type(_options.connection_type);
     }
     cntl->_response = response;
+    // 异步回调使用，非异步为空
     cntl->_done = done;
     cntl->_pack_request = _pack_request;
     cntl->_method = method;
@@ -549,6 +558,7 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
         } else {
             cntl->_deadline_us = cntl->timeout_ms() * 1000L + start_send_real_us;
         }
+        // 对冲请求HandleBackupRequest调用HandleSocketFailed(call_id的创建)
         const int rc = bthread_timer_add(
             &cntl->_timeout_id,
             butil::microseconds_to_timespec(
@@ -560,8 +570,7 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
         }
     } else if (cntl->timeout_ms() >= 0) {
         // Setup timer for RPC timetout
-
-        // _deadline_us is for truncating _connect_timeout_ms
+        // 超时请求的处理
         cntl->_deadline_us = cntl->timeout_ms() * 1000L + start_send_real_us;
         const int rc = bthread_timer_add(
             &cntl->_timeout_id,
@@ -574,12 +583,13 @@ void Channel::CallMethod(const google::protobuf::MethodDescriptor* method,
     } else {
         cntl->_deadline_us = -1;
     }
-
+    // 发送数据
     cntl->IssueRPC(start_send_real_us);
     if (done == NULL) {
         // MUST wait for response when sending synchronous RPC. It will
         // be woken up by callback when RPC finishes (succeeds or still
         // fails after retry)
+        // 同步等待数据返回
         Join(correlation_id);
         if (cntl->_span) {
             cntl->SubmitSpan();
