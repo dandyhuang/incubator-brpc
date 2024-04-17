@@ -81,7 +81,7 @@ void* TaskControl::worker_thread(void* arg) {
     auto tag = dummy->tag;
     delete dummy;
     run_tagged_worker_startfn(tag);
-
+    // 每个线程有一个对应的 TaskGroup
     TaskGroup* g = c->create_group(tag);
     TaskStatistics stat;
     if (NULL == g) {
@@ -93,6 +93,7 @@ void* TaskControl::worker_thread(void* arg) {
     butil::PlatformThread::SetName(worker_thread_name.c_str());
     BT_VLOG << "Created worker=" << pthread_self() << " bthread=" << g->main_tid()
             << " tag=" << g->tag();
+    // tls_task_group存储，开始的时候，都会判断线程是否存在
     tls_task_group = g;
     // bthread_worker_count 统计
     c->_nworkers << 1;
