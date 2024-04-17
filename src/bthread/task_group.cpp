@@ -121,7 +121,9 @@ bool TaskGroup::wait_task(bthread_t* tid) {
         if (_last_pl_state.stopped()) {
             return false;
         }
+        // 初始值都是0，等待任务到来
         _pl->wait(_last_pl_state);
+        // 窃取任务
         if (steal_task(tid)) {
             return true;
         }
@@ -149,7 +151,9 @@ void TaskGroup::run_main_task() {
 
     TaskGroup* dummy = this;
     bthread_t tid;
+    // 获取任务
     while (wait_task(&tid)) {
+        // 获取到tid后，执行调度
         TaskGroup::sched_to(&dummy, tid);
         DCHECK_EQ(this, dummy);
         DCHECK_EQ(_cur_meta->stack, _main_stack);
@@ -210,20 +214,24 @@ TaskGroup::~TaskGroup() {
 }
 
 int TaskGroup::init(size_t runqueue_capacity) {
+    // 来自worker的放入_rq队列， 本地队列wait-free的
     if (_rq.init(runqueue_capacity) != 0) {
         LOG(FATAL) << "Fail to init _rq";
         return -1;
     }
+    // 非worker的bthread，放入_remote_rq队列
     if (_remote_rq.init(runqueue_capacity / 2) != 0) {
         LOG(FATAL) << "Fail to init _remote_rq";
         return -1;
     }
+    // 获取上下文堆栈信息
     ContextualStack* stk = get_stack(STACK_TYPE_MAIN, NULL);
     if (NULL == stk) {
         LOG(FATAL) << "Fail to get main stack container";
         return -1;
     }
     butil::ResourceId<TaskMeta> slot;
+    // 从资源池里头拿出一个TaskMeta对象,和socketid管理一样
     TaskMeta* m = butil::get_resource<TaskMeta>(&slot);
     if (NULL == m) {
         LOG(FATAL) << "Fail to get TaskMeta";
@@ -238,6 +246,7 @@ int TaskGroup::init(size_t runqueue_capacity) {
     m->cpuwide_start_ns = butil::cpuwide_time_ns();
     m->stat = EMPTY_STAT;
     m->attr = BTHREAD_ATTR_TASKGROUP;
+    // 初始值为1 << 32
     m->tid = make_tid(*m->version_butex, slot);
     m->set_stack(stk);
 

@@ -112,6 +112,7 @@ private:
     bvar::Adder<int64_t> _nbthreads;
 
     static const int PARKING_LOT_NUM = 4;
+    // 用于bthread任务的等待-通知
     ParkingLot _pl[PARKING_LOT_NUM];
 };
 

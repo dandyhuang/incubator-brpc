@@ -62,6 +62,7 @@ void* TaskControl::worker_thread(void* arg) {
 #endif
     
     TaskControl* c = static_cast<TaskControl*>(arg);
+    // 每个线程有一个对应的 TaskGroup
     TaskGroup* g = c->create_group();
     TaskStatistics stat;
     if (NULL == g) {
@@ -71,8 +72,11 @@ void* TaskControl::worker_thread(void* arg) {
     BT_VLOG << "Created worker=" << pthread_self()
             << " bthread=" << g->main_tid();
 
+    // tls_task_group存储，开始的时候，都会判断线程是否存在
     tls_task_group = g;
+    // bthread_worker_count 统计
     c->_nworkers << 1;
+    // 任务主循环
     g->run_main_task();
 
     stat = g->main_stat();

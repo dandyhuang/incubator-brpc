@@ -37,11 +37,13 @@ namespace bthread {
 
 inline int futex_wait_private(
     void* addr1, int expected, const timespec* timeout) {
+    // 当 *addr1 == expected 时，线程挂起等待
     return syscall(SYS_futex, addr1, (FUTEX_WAIT | FUTEX_PRIVATE_FLAG),
                    expected, timeout, NULL, 0);
 }
 
 inline int futex_wake_private(void* addr1, int nwake) {
+    // 唤醒 nwake 个等待的线程
     return syscall(SYS_futex, addr1, (FUTEX_WAKE | FUTEX_PRIVATE_FLAG),
                    nwake, NULL, NULL, 0);
 }
