@@ -214,12 +214,14 @@ friend class TaskControl;
     bool wait_task(bthread_t* tid);
 
     bool steal_task(bthread_t* tid) {
+        // 本地队列中有任务，优先本地
         if (_remote_rq.pop(tid)) {
             return true;
         }
 #ifndef BTHREAD_DONT_SAVE_PARKING_STATE
         _last_pl_state = _pl->get_state();
-#endif
+#endif  
+        // 全局窃取
         return _control->steal_task(tid, &_steal_seed, _steal_offset);
     }
 

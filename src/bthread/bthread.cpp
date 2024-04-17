@@ -107,6 +107,8 @@ inline TaskControl* get_or_new_task_control() {
     int concurrency = FLAGS_bthread_min_concurrency > 0 ?
         FLAGS_bthread_min_concurrency :
         FLAGS_bthread_concurrency;
+    // 初始化，concurrency 为工作线程数,cpu核数+1, 
+    // 因为bthread_setconcurrency() 修改了FLAGS_bthread_concurrency
     if (c->init(concurrency) != 0) {
         LOG(ERROR) << "Fail to init g_task_control";
         delete c;

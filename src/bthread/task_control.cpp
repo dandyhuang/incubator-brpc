@@ -94,8 +94,10 @@ void* TaskControl::worker_thread(void* arg) {
     BT_VLOG << "Created worker=" << pthread_self() << " bthread=" << g->main_tid()
             << " tag=" << g->tag();
     tls_task_group = g;
+    // bthread_worker_count 统计
     c->_nworkers << 1;
     c->tag_nworkers(g->tag()) << 1;
+    // 任务主循环
     g->run_main_task();
 
     stat = g->main_stat();

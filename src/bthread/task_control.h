@@ -142,8 +142,11 @@ private:
     std::vector<bvar::PassiveStatus<double>*> _tagged_cumulated_worker_time;
     std::vector<bvar::PerSecond<bvar::PassiveStatus<double>>*> _tagged_worker_usage_second;
     std::vector<bvar::Adder<int64_t>*> _tagged_nbthreads;
-
+    // 用于bthread任务的等待-通知
     std::vector<TaggedParkingLot> _pl;
+    // static const int PARKING_LOT_NUM = 4;
+    // // 用于bthread任务的等待-通知
+    // ParkingLot _pl[PARKING_LOT_NUM];
 };
 
 inline bvar::LatencyRecorder& TaskControl::exposed_pending_time() {
