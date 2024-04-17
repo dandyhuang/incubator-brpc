@@ -94,6 +94,7 @@ inline TaskControl* get_or_new_task_control() {
     if (c != NULL) {
         return c;
     }
+    
     BAIDU_SCOPED_LOCK(g_task_control_mutex);
     c = p->load(butil::memory_order_consume);
     if (c != NULL) {
@@ -226,7 +227,7 @@ struct TidJoiner {
 }  // namespace bthread
 
 extern "C" {
-
+// 当前worker立即执行新bthread
 int bthread_start_urgent(bthread_t* __restrict tid,
                          const bthread_attr_t* __restrict attr,
                          void * (*fn)(void*),
@@ -238,6 +239,7 @@ int bthread_start_urgent(bthread_t* __restrict tid,
             return bthread::TaskGroup::start_foreground(&g, tid, attr, fn, arg);
         }
     }
+    // 首次执行，需要初始化
     return bthread::start_from_non_worker(tid, attr, fn, arg);
 }
 
@@ -252,6 +254,7 @@ int bthread_start_background(bthread_t* __restrict tid,
             return g->start_background<false>(tid, attr, fn, arg);
         }
     }
+    // 首次执行，需要初始化
     return bthread::start_from_non_worker(tid, attr, fn, arg);
 }
 
