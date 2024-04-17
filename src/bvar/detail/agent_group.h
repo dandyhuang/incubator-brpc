@@ -50,7 +50,7 @@ template <typename Agent>
 class AgentGroup {
 public:
     typedef Agent   agent_type;
-
+   
     // TODO: We should remove the template parameter and unify AgentGroup
     // of all bvar with a same one, to reuse the memory between different
     // type of bvar. The unified AgentGroup allocates small structs in-place

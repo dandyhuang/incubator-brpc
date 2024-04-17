@@ -82,6 +82,8 @@ struct VarMapWithLock : public VarMap {
         CHECK_EQ(0, init(1024, 80));
         pthread_mutexattr_t attr;
         pthread_mutexattr_init(&attr);
+        // PTHREAD_MUTEX_RECURSIVE_NP，嵌套锁，允许同一个线程对同一个锁成功获得多次，并通过多次unlock解锁。如果是不同线程请求，则在加锁线程解锁时重新竞争。
+        // 多次锁定互斥锁需要进行相同次数的解除锁定才可以释放该锁，然后其他线程才能获取该互斥锁。如果线程尝试解除锁定的互斥锁已经由其他线程锁定，则会返回错误。
         pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
         pthread_mutex_init(&mutex, &attr);
         pthread_mutexattr_destroy(&attr);

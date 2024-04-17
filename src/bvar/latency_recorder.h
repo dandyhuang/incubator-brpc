@@ -51,8 +51,11 @@ public:
     explicit LatencyRecorderBase(time_t window_size);
     time_t window_size() const { return _latency_window.window_size(); }
 protected:
+    // 平均值
     IntRecorder _latency;
+    // 最大值
     Maxer<int64_t> _max_latency;
+    // 分为数统计
     Percentile _latency_percentile;
 
     RecorderWindow _latency_window;

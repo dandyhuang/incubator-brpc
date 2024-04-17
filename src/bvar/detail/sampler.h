@@ -111,16 +111,19 @@ public:
             if (NULL == mem) {
                 return;
             }
+            // 新建一个BoundedQueue将item挪过去然后交换
             butil::BoundedQueue<Sample<T> > new_q(
                 mem, memsize, butil::OWNS_STORAGE);
             Sample<T> tmp;
             while (_q.pop(&tmp)) {
                 new_q.push(tmp);
             }
+            //_q会在析构的时候释放空间
             new_q.swap(_q);
         }
 
         Sample<T> latest;
+        // IntRecorder类型不想等
         if (butil::is_same<InvOp, VoidOp>::value) {
             // The operator can't be inversed.
             // We reset the reducer and save the result as a sample.
@@ -169,6 +172,7 @@ public:
         } else {
             // Diff the latest and oldest sample within the window.
             result->data = latest->data;
+            // 最近值减去10秒前的值
             _reducer->inv_op()(result->data, oldest->data);
         }
         result->time_us = latest->time_us - oldest->time_us;

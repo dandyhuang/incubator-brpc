@@ -78,7 +78,7 @@ public:
     
     WindowBase(R* var, time_t window_size)
         : _var(var)
-        , _window_size(window_size > 0 ? window_size : FLAGS_bvar_dump_interval)
+        , _window_size(window_size > 0 ? window_size : FLAGS_bvar_dump_interval) // 统计窗口默认10s
         , _sampler(var->get_sampler())
         , _series_sampler(NULL) {
         CHECK_EQ(0, _sampler->set_window_size(_window_size));
@@ -107,7 +107,7 @@ public:
         }
         return value_type();
     }
-
+    // 统计窗口默认10s
     value_type get_value() const { return get_value(_window_size); }
     
     void describe(std::ostream& os, bool quote_string) const override {
