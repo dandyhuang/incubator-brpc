@@ -96,6 +96,7 @@ inline TaskControl* get_or_new_task_control() {
     }
     
     BAIDU_SCOPED_LOCK(g_task_control_mutex);
+    // 加锁后，在尝试一次
     c = p->load(butil::memory_order_consume);
     if (c != NULL) {
         return c;
