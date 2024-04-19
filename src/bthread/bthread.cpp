@@ -132,6 +132,7 @@ start_from_non_worker(bthread_t* __restrict tid,
     if (NULL == c) {
         return ENOMEM;
     }
+    // 初始化flags为0
     if (attr != NULL && (attr->flags & BTHREAD_NOSIGNAL)) {
         // Remember the TaskGroup to insert NOSIGNAL tasks for 2 reasons:
         // 1. NOSIGNAL is often for creating many bthreads in batch,

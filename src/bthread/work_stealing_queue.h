@@ -69,6 +69,7 @@ public:
     // Returns true on pushed.
     // May run in parallel with steal().
     // Never run in parallel with pop() or another push().
+    // 从底部追加，非线程安全，与 steal 线程安全
     bool push(const T& x) {
         const size_t b = _bottom.load(butil::memory_order_relaxed);
         const size_t t = _top.load(butil::memory_order_acquire);
@@ -84,6 +85,7 @@ public:
     // Returns true on popped and the item is written to `val'.
     // May run in parallel with steal().
     // Never run in parallel with push() or another pop().
+    // 从底部弹出，非线程安全，与 steal 线程安全
     bool pop(T* val) {
         const size_t b = _bottom.load(butil::memory_order_relaxed);
         size_t t = _top.load(butil::memory_order_relaxed);
@@ -114,6 +116,7 @@ public:
     // Steal one item from the queue.
     // Returns true on stolen.
     // May run in parallel with push() pop() or another steal().
+    // 从顶部窃取，线程安全
     bool steal(T* val) {
         size_t t = _top.load(butil::memory_order_acquire);
         size_t b = _bottom.load(butil::memory_order_acquire);
