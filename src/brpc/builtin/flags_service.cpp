@@ -69,6 +69,7 @@ static void PrintFlag(std::ostream& os, const GFLAGS_NS::CommandLineFlagInfo& fl
         os << "<tr><td>";
     }
     os << flag.name;
+    // 有校验器，才允许修改
     if (flag.has_validator_fn) {
         if (use_html) {
             os << " (<a href='/flags/" << flag.name
