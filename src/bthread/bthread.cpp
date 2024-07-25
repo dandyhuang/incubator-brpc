@@ -172,7 +172,7 @@ struct TidJoiner {
 }  // namespace bthread
 
 extern "C" {
-
+// 让出当前worker立即执行新bthread。
 int bthread_start_urgent(bthread_t* __restrict tid,
                          const bthread_attr_t* __restrict attr,
                          void * (*fn)(void*),
@@ -185,6 +185,7 @@ int bthread_start_urgent(bthread_t* __restrict tid,
     return bthread::start_from_non_worker(tid, attr, fn, arg);
 }
 
+// 将要启动的bthread放入队列等待调度
 int bthread_start_background(bthread_t* __restrict tid,
                              const bthread_attr_t* __restrict attr,
                              void * (*fn)(void*),

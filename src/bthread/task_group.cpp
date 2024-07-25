@@ -301,6 +301,7 @@ void TaskGroup::task_runner(intptr_t skip_remained) {
         // libraries.
         void* thread_return;
         try {
+            // 执行应用程序设置的任务函数，在任务函数中可能yield让出cpu，也可能产生新的bthread。
             thread_return = m->fn(m->arg);
         } catch (ExitException& e) {
             thread_return = e.value();
@@ -341,10 +342,12 @@ void TaskGroup::task_runner(intptr_t skip_remained) {
                 ++*m->version_butex;
             }
         }
+        // 任务函数执行完成后，需要唤起等待该任务函数执行结束的bthread
         butex_wake_except(m->version_butex, 0);
 
         g->_control->_nbthreads << -1;
         g->set_remained(TaskGroup::_release_last_context, m);
+        // 将pthread线程执行流转入下一个可执行的bthread
         ending_sched(&g);
 
     } while (g->_cur_meta->tid != g->_main_tid);
@@ -375,10 +378,12 @@ int TaskGroup::start_foreground(TaskGroup** pg,
     const int64_t start_ns = butil::cpuwide_time_ns();
     const bthread_attr_t using_attr = (attr ? *attr : BTHREAD_ATTR_NORMAL);
     butil::ResourceId<TaskMeta> slot;
+    // 获取新的TM
     TaskMeta* m = butil::get_resource(&slot);
     if (__builtin_expect(!m, 0)) {
         return ENOMEM;
     }
+
     CHECK(m->current_waiter.load(butil::memory_order_relaxed) == NULL);
     m->stop = false;
     m->interrupted = false;
@@ -390,6 +395,7 @@ int TaskGroup::start_foreground(TaskGroup** pg,
     m->local_storage = LOCAL_STORAGE_INIT;
     m->cpuwide_start_ns = start_ns;
     m->stat = EMPTY_STAT;
+    // 创建bid
     m->tid = make_tid(*m->version_butex, slot);
     *th = m->tid;
     if (using_attr.flags & BTHREAD_LOG_START_AND_FINISH) {

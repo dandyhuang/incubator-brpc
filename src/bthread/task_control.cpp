@@ -385,7 +385,8 @@ void TaskControl::signal_task(int num_task) {
             }
             num_task -= _pl[start_index].signal(1);
         }
-    }
+
+    // 因为异常原因，退出的work，重新创建一个work
     if (num_task > 0 &&
         FLAGS_bthread_min_concurrency > 0 &&    // test min_concurrency for performance
         _concurrency.load(butil::memory_order_relaxed) < FLAGS_bthread_concurrency) {

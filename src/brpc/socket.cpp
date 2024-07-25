@@ -1233,6 +1233,7 @@ int Socket::CheckConnected(int sockfd) {
 
 int Socket::ConnectIfNot(const timespec* abstime, WriteRequest* req) {
     if (_fd.load(butil::memory_order_consume) >= 0) {
+       // 0标识原来已连接
        return 0;
     }
 
@@ -1250,6 +1251,7 @@ int Socket::ConnectIfNot(const timespec* abstime, WriteRequest* req) {
         }
     }
     s.release();
+    // 1表示正在连接
     return 1;    
 }
 
